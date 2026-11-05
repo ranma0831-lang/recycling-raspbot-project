@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#161413">
+  <title>분리수거 로봇 대시보드</title>
+  <meta name="description" content="스마트 분리수거 로봇 관제 시안 C — 휴대폰 웹앱을 먼저 생각한 큰 글씨 + 하단 탭 구성">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&display=swap" rel="stylesheet">
+  <script src="https://code.iconify.design/iconify-icon/2.3.0/iconify-icon.min.js"></script>
+  <script>
+    tailwind.config = { theme: { extend: { fontFamily: { sans: ['Pretendard', 'system-ui', 'sans-serif'], wide: ['Unbounded', 'Pretendard', 'sans-serif'] } } } }
+  </script>
+  <style>
+    :root { --bg: #161413; --panel: #1f1c1b; --line: #3a3330; --ink: #ece5df; --mute: #9b918b; --accent: #a85f3d; --ok: #7fae7a; --warn: #d9a441; --danger: #c8443a; --r: 22px; }
+    body { background: var(--bg); color: var(--ink); word-break: keep-all; }
+    .word { font-size: clamp(2.5rem, 13vw, 7.5rem); }
+    .tabs a[aria-current="page"] { color: var(--accent); }
+    button { transition: transform .4s cubic-bezier(.16,1,.3,1); }
+    button:not(:disabled):active { transform: scale(.96); }
+    :focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+    @keyframes swap { from { opacity: 0; transform: translateY(.3em); } to { opacity: 1; transform: none; } }
+    .swap { animation: swap .35s cubic-bezier(.16,1,.3,1); }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+  </style>
+</head>
+<body class="font-sans antialiased min-h-[100dvh] pb-28 lg:pb-0 lg:pl-24">
+
+  <!-- 탭: 휴대폰은 아래, 넓은 화면은 왼쪽 레일 -->
+  <nav class="tabs fixed z-40 bottom-0 inset-x-0 lg:inset-x-auto lg:top-0 lg:left-0 lg:w-24 bg-[var(--bg)] border-t lg:border-t-0 lg:border-r border-[var(--line)] grid grid-cols-5 lg:grid-cols-1 lg:content-start lg:pt-6 lg:gap-2 text-[11px] pb-[env(safe-area-inset-bottom)]" aria-label="메뉴">
+    <p class="hidden lg:block font-wide font-extrabold text-xs text-center mb-4">SORT<br>BOT</p>
+    <a href="#live" class="py-2.5 flex flex-col items-center gap-1"><iconify-icon icon="solar:camera-linear" class="text-xl"></iconify-icon>실시간</a>
+    <a href="#stats" class="py-2.5 flex flex-col items-center gap-1"><iconify-icon icon="solar:chart-square-linear" class="text-xl"></iconify-icon>통계</a>
+    <a href="#records" class="py-2.5 flex flex-col items-center gap-1"><iconify-icon icon="solar:history-linear" class="text-xl"></iconify-icon>기록</a>
+    <a href="#alerts" class="py-2.5 flex flex-col items-center gap-1 relative"><iconify-icon icon="solar:bell-linear" class="text-xl"></iconify-icon>알림<b data-alert-count class="absolute top-1 left-1/2 ml-1.5 rounded-full bg-[var(--danger)] text-white px-1.5 text-[10px]"></b></a>
+    <a href="#control" class="py-2.5 flex flex-col items-center gap-1"><iconify-icon icon="solar:gamepad-linear" class="text-xl"></iconify-icon>제어</a>
+  </nav>
+
+  <!-- 어느 탭에서든 바로 누를 수 있는 비상정지 -->
+  <button data-estop aria-label="정지" class="fixed z-40 right-4 bottom-24 lg:bottom-6 w-16 h-16 rounded-full bg-[var(--danger)] text-white border-4 border-[#f3d34a] shadow-[0_8px_24px_rgba(0,0,0,.45)] grid place-items-center text-[11px] font-bold leading-tight">정지</button>
+
+  <div class="max-w-5xl mx-auto px-4 sm:px-6">
+    <header class="flex items-center justify-between pt-5 text-xs">
+      <span class="font-wide font-extrabold text-sm tracking-tight lg:invisible">SORTBOT</span>
+      <span data-conn class="flex items-center gap-1.5"></span>
+    </header>
+
+    <section id="live" class="view">
+      <p class="mt-6 text-sm text-[var(--mute)]">지금 로봇이 하는 일</p>
+      <p id="word" class="word font-wide font-extrabold uppercase leading-[.9] tracking-tighter" aria-hidden="true">—</p>
+      <p id="sub" class="mt-2 text-lg font-bold" aria-live="polite"></p>
+      <!-- 카메라 두 대: ESP32 는 트레이를 내려다보며 종류를 판정, 로봇 카메라는 앞을 보며 통 마커를 찾는다 -->
+      <div class="mt-6 grid lg:grid-cols-[1.15fr_1fr] gap-4 items-start">
+        <section aria-labelledby="h-esp">
+          <h2 id="h-esp" class="mb-2 text-sm font-bold flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-[var(--accent)] text-white grid place-items-center text-xs">1</span>무엇인지 판단 <span class="font-normal text-[var(--mute)]">· ESP32S3 카메라</span></h2>
+          <div id="ai" class="rounded-[var(--r)] border border-[var(--line)] bg-[var(--panel)] p-5"></div>
+        </section>
+        <section aria-labelledby="h-cam">
+          <h2 id="h-cam" class="mb-2 text-sm font-bold flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-[var(--line)] grid place-items-center text-xs">2</span>통 찾아가기 <span class="font-normal text-[var(--mute)]">· 로봇 카메라</span></h2>
+          <div id="cam"></div>
+        </section>
+      </div>
+      <div id="robot" class="mt-4 rounded-[var(--r)] bg-[var(--panel)] border border-[var(--line)] p-5"></div>
+      <div class="mt-4 rounded-[var(--r)] border border-[var(--line)] p-5">
+        <p class="text-xs text-[var(--mute)]">통 <span class="cap"></span></p>
+        <div id="tubes" class="mt-4 grid grid-cols-3 gap-4"></div>
+      </div>
+    </section>
+    <section id="stats" class="view pt-6" hidden><h1 class="font-wide font-extrabold uppercase text-4xl tracking-tight mb-5">통계</h1><div id="st"></div></section>
+    <section id="records" class="view pt-6" hidden><h1 class="font-wide font-extrabold uppercase text-4xl tracking-tight mb-5">기록</h1><div id="rec"></div></section>
+    <section id="alerts" class="view pt-6" hidden><h1 class="font-wide font-extrabold uppercase text-4xl tracking-tight mb-5">알림</h1><div id="alr"></div></section>
+    <section id="control" class="view pt-6" hidden><h1 class="font-wide font-extrabold uppercase text-4xl tracking-tight mb-5">제어</h1><div id="ctl"></div></section>
+    <p class="mt-8 mb-4 text-xs text-[var(--mute)]">대시보드 — 주소 뒤에 ?robot=http://로봇IP:8000 을 붙이면 로봇 서버에 연결, 없으면 가짜 로봇. 홈 화면에 추가해 앱처럼 쓰는 화면을 가정했습니다.</p>
+  </div>
+
+  <script src="robot.js"></script>
+  <script src="ui.js"></script>
+  <script>
+    UI.mount({ camera: '#cam', ai: '#ai', robot: '#robot', stats: '#st', records: '#rec', alerts: '#alr', control: '#ctl' });
+
+    const route = () => {
+      const id = (location.hash || '#live').slice(1);
+      document.querySelectorAll('.view').forEach(v => v.hidden = v.id !== id);
+      document.querySelectorAll('.tabs a').forEach(a => a.hash === '#' + id ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
+      scrollTo(0, 0);
+    };
+    addEventListener('hashchange', route); route();
+
+    const L = Sortbot.LABELS, q = s => document.querySelector(s);
+    const EN = { can: 'CAN', pet: 'PET', paper: 'PAPER' };
+    q('#tubes').innerHTML = Sortbot.CLASSES.map(c => `
+      <div id="bin-${c}" class="flex flex-col items-center gap-2">
+        <div class="relative w-full max-w-[64px] h-36 rounded-full border border-[var(--line)] bg-[var(--bg)] overflow-hidden">
+          <i class="absolute inset-0 bg-[var(--accent)] origin-bottom transition-transform duration-700"></i>
+          <span class="n absolute inset-x-0 top-3 text-center font-wide font-bold text-lg mix-blend-difference"></span>
+        </div>
+        <span class="lb font-bold text-sm">${L[c]}</span>
+      </div>`).join('');
+
+    let lastWord = '';
+    Sortbot.on(s => {
+      const m = s.mission, going = s.connected && m?.running;
+      const [word, sub, col] = !s.connected ? ['OFF', '로봇 서버와 연결이 끊겼어요', 'var(--warn)']
+        : s.stage === 'failed' ? ['FAIL', `임무 실패 — ${m.message}`, 'var(--danger)']
+        : going && s.stage === 'return' ? ['HOME', '출발점으로 돌아가는 중', 'var(--ink)']
+        : going && m.station in EN ? [EN[m.station], `${L[m.station]} 통 — ${Sortbot.STAGES.find(([k]) => k === s.stage)?.[1] || '출발'}`, 'var(--accent)']
+        : ['READY', '트레이에 물건을 올려 주세요', 'var(--ink)'];
+      q('#sub').textContent = sub;
+      if (word !== lastWord) {
+        const w = q('#word');
+        w.textContent = word; w.classList.remove('swap'); void w.offsetWidth; w.classList.add('swap');
+        w.style.color = col;
+        lastWord = word;
+      }
+      q('.cap').textContent = `· ${s.settings.capacity}개가 차면 알림 (가정)`;
+      Sortbot.CLASSES.forEach(c => {
+        const el = q('#bin-' + c);
+        el.querySelector('.n').textContent = s.bins[c];
+        el.querySelector('i').style.transform = `scaleY(${Math.min(s.bins[c] / s.settings.capacity, 1)})`;
+        el.querySelector('.lb').style.color = Sortbot.isFull(c) ? 'var(--warn)' : '';
+        el.querySelector('.lb').textContent = Sortbot.isFull(c) ? `${L[c]} · 가득` : L[c];
+      });
+    });
+  </script>
+</body>
+</html>
